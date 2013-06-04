@@ -8,6 +8,7 @@ while true
 
   factor = 10 # factor to reduce the number returned by
   delay  = 15 # seconds between queries
+  pin    = 3  # must be a PWM pin
 
 
   # open connection to the mail server
@@ -25,10 +26,10 @@ while true
 
   # > 57 could damage the meter!
   if val < 57 
-    board.analog_write(3, val)
+    board.analog_write(pin, val)
     puts ret
   else
-    board.analog_write(3, 57)
+    board.analog_write(pin, 57)
     puts "#{val} - Out of Range"
   end
  
