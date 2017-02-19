@@ -4,19 +4,58 @@
 #include <Dns.h>
 #include <Dhcp.h>
 #include <ArduinoJson.h>
+#include <Adafruit_NeoPixel.h>
 
-
+#define PIXEL_PIN    6
+#define PIXEL_COUNT 24
 byte mac[] = { 0x98, 0x76, 0xB6, 0x10, 0x51, 0x60 };
 
-// ip of MQTT server
-IPAddress server(10, 0, 0, 1);
+IPAddress mqttServer(10, 0, 0, 1);
 
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 EthernetClient ethClient;
-PubSubClient client(ethClient);
+PubSubClient mqttClient(ethClient);
 
-char data[80];
+int showType = 0;
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void setup()
+{
+  Serial.begin(115200);
+
+  mqttClient.setServer(mqttServer, 1883);
+  mqttClient.setCallback(mqttCallback);
+
+  Ethernet.begin(mac);
+  delay(1500);
+
+  // NeoPixel related
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+  // End
+
+  Serial.println("Running...");
+  Serial.println();
+
+  // Echo local IP address:
+  /*Serial.print("My IP address: ");
+  for (byte thisByte = 0; thisByte < 4; thisByte++) {
+    // print the value of each byte of the IP address:
+    Serial.print(Ethernet.localIP()[thisByte], DEC);
+    Serial.print(".");
+  }
+  */
+
+}
+
+void loop()
+{
+  if (!mqttClient.connected()) {
+    mqttReconnect();
+  }
+  mqttClient.loop();
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("[");
   Serial.print(topic);
   Serial.print("] ");
@@ -55,38 +94,71 @@ void callback(char* topic, byte* payload, unsigned int length) {
   //Serial.println(time);
   //Serial.println(latitude, 6);
   //Serial.println(longitude, 6);
+
+  // {"showType":0}
+  // {"showType":1}
+  // {"showType":2}
+  // {"showType":3}
+  // {"showType":4}
+  // {"showType":5}
+  // {"showType":6}
+  // {"showType":7}
+  // {"showType":8}
+  // {"showType":9}
+
+  startShow(root["showType"]);
 }
 
-void reconnect() {
+void mqttReconnect() {
   // Loop until we're reconnected
-  while (!client.connected()) {
+  while (!mqttClient.connected()) {
     Serial.print("Attempting MQTT connection ");
     Serial.print("to: ");
-    Serial.print(server);
+    Serial.print(mqttServer);
     Serial.print("... ");
     // Attempt to connect
-    if (client.connect("arduinoClient")) {
+    if (mqttClient.connect("arduinoClient")) {
       Serial.println("connected");
       // Once connected, publish an announcement...
 
-      String payload = "";
-      payload += "mac: ";
-      payload += mac_address() ;
-      payload += "\n";
-      payload += ip_address() ;
-      payload += "\n";
-      payload += "hostname:";
-      payload += String(DhcpClass.hostname(), CHAR);
-      payload += "\n";
+      char outData[80];
+      char outTopic[80];
+      char inTopic[80];
 
-      payload.toCharArray(data, (payload.length() + 1));
-      client.publish("outTopic", data);
+      String payload = "Hello From: ";
+             payload += ip_address();
+             payload += "\n";
+
+      Serial.print("Payload: ");
+      Serial.println(payload);
+      payload.toCharArray(outData, (payload.length() + 1));
+
+      String pubTo = mac_address();
+             pubTo += "out";
+
+      Serial.print("pubTo: ");
+      //Serial.println(pubTo);
+      pubTo.toCharArray(outTopic, (pubTo.length() + 1));
+      Serial.println(outTopic);
+
+      Serial.println("Publishing...");
+      mqttClient.publish(outTopic, outData);
 
       // ... and resubscribe
-      client.subscribe("inTopic");
+      String subTo = mac_address();
+             subTo += "in";
+
+      Serial.print("subTo: ");
+      Serial.println(subTo);
+      subTo.toCharArray(inTopic, (subTo.length() + 1));
+
+      Serial.println("Subscribing... ");
+      mqttClient.subscribe(inTopic);
+      Serial.println("Done.");
+
     } else {
       Serial.print("failed, rc=");
-      Serial.print(client.state());
+      Serial.print(mqttClient.state());
       Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
       delay(5000);
@@ -114,31 +186,112 @@ String ip_address() {
   return address;
 }
 
-void setup()
-{
-  Serial.begin(115200);
-
-  client.setServer(server, 1883);
-  client.setCallback(callback);
-
-  Ethernet.begin(mac);
-  // Allow the hardware to sort itself out
-  delay(1500);
-
-  // print your local IP address:
-  Serial.print("My IP address: ");
-  for (byte thisByte = 0; thisByte < 4; thisByte++) {
-    // print the value of each byte of the IP address:
-    Serial.print(Ethernet.localIP()[thisByte], DEC);
-    Serial.print(".");
+void startShow(int i) {
+  switch(i){
+    case 0: colorWipe(strip.Color(0, 0, 0), 50);    // Black/off
+            break;
+    case 1: colorWipe(strip.Color(255, 0, 0), 50);  // Red
+            break;
+    case 2: colorWipe(strip.Color(0, 255, 0), 50);  // Green
+            break;
+    case 3: colorWipe(strip.Color(0, 0, 255), 50);  // Blue
+            break;
+    case 4: theaterChase(strip.Color(127, 127, 127), 50); // White
+            break;
+    case 5: theaterChase(strip.Color(127,   0,   0), 50); // Red
+            break;
+    case 6: theaterChase(strip.Color(  0,   0, 127), 50); // Blue
+            break;
+    case 7: rainbow(20);
+            break;
+    case 8: rainbowCycle(20);
+            break;
+    case 9: theaterChaseRainbow(50);
+            break;
   }
-  Serial.println();
 }
 
-void loop()
-{
-  if (!client.connected()) {
-    reconnect();
+// Fill the dots one after the other with a color
+void colorWipe(uint32_t c, uint8_t wait) {
+  for(uint16_t i=0; i<strip.numPixels(); i++) {
+    strip.setPixelColor(i, c);
+    strip.show();
+    delay(wait);
   }
-  client.loop();
+}
+
+void rainbow(uint8_t wait) {
+  uint16_t i, j;
+
+  for(j=0; j<256; j++) {
+    for(i=0; i<strip.numPixels(); i++) {
+      strip.setPixelColor(i, Wheel((i+j) & 255));
+    }
+    strip.show();
+    delay(wait);
+  }
+}
+
+// Slightly different, this makes the rainbow equally distributed throughout
+void rainbowCycle(uint8_t wait) {
+  uint16_t i, j;
+
+  for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
+    for(i=0; i< strip.numPixels(); i++) {
+      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
+    }
+    strip.show();
+    delay(wait);
+  }
+}
+
+//Theatre-style crawling lights.
+void theaterChase(uint32_t c, uint8_t wait) {
+  for (int j=0; j<10; j++) {  //do 10 cycles of chasing
+    for (int q=0; q < 3; q++) {
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, c);    //turn every third pixel on
+      }
+      strip.show();
+
+      delay(wait);
+
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, 0);        //turn every third pixel off
+      }
+    }
+  }
+}
+
+//Theatre-style crawling lights with rainbow effect
+void theaterChaseRainbow(uint8_t wait) {
+  for (int j=0; j < 256; j++) {     // cycle all 256 colors in the wheel
+    for (int q=0; q < 3; q++) {
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, Wheel( (i+j) % 255));    //turn every third pixel on
+      }
+      strip.show();
+
+      delay(wait);
+
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, 0);        //turn every third pixel off
+      }
+    }
+  }
+}
+
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if(WheelPos < 170) {
+    WheelPos -= 85;
+    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
