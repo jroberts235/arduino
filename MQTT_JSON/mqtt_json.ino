@@ -1,14 +1,18 @@
 #include <SPI.h>
-#include <Ethernet2.h>
+#include <Ethernet.h>
+//#include <Ethernet2.h>
 #include <PubSubClient.h>
 #include <Dns.h>
 #include <Dhcp.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
 
-#define PIXEL_PIN    6
-#define PIXEL_COUNT 24
-byte mac[] = { 0x98, 0x76, 0xB6, 0x10, 0x51, 0x60 };
+#define PIXEL_PIN    7 // Arduino-Ethernet-0
+//#define PIXEL_PIN    6
+#define PIXEL_COUNT 6
+//#define PIXEL_COUNT 24
+//byte mac[] = { 0x98, 0x76, 0xB6, 0x10, 0x51, 0x60 }; // Feather-MO-0
+byte mac[] = { 0x90, 0xA2, 0xDA, 0x00, 0x4A, 0xD5 }; // Arduino-Ethernet-0
 
 IPAddress mqttServer(10, 0, 0, 1);
 
@@ -125,35 +129,33 @@ void mqttReconnect() {
       char outTopic[80];
       char inTopic[80];
 
+      // construct a payload
       String payload = "Hello From: ";
-             payload += ip_address();
+             payload += my_ip_address();
              payload += "\n";
-
-      Serial.print("Payload: ");
-      Serial.println(payload);
       payload.toCharArray(outData, (payload.length() + 1));
+      Serial.print("Payload: ");
+      Serial.println(outData);
 
-      String pubTo = mac_address();
+      // construct the topic name
+      String pubTo = my_mac_address();
              pubTo += "out";
-
-      Serial.print("pubTo: ");
-      //Serial.println(pubTo);
       pubTo.toCharArray(outTopic, (pubTo.length() + 1));
+      Serial.print("pubTo: ");
       Serial.println(outTopic);
 
-      Serial.println("Publishing...");
+      // send the message
       mqttClient.publish(outTopic, outData);
 
       // ... and resubscribe
-      String subTo = mac_address();
+      String subTo = my_mac_address();
              subTo += "in";
-
-      Serial.print("subTo: ");
-      Serial.println(subTo);
       subTo.toCharArray(inTopic, (subTo.length() + 1));
 
-      Serial.println("Subscribing... ");
       mqttClient.subscribe(inTopic);
+      Serial.print("resubscribed to: ");
+      Serial.println(inTopic);
+
       Serial.println("Done.");
 
     } else {
@@ -166,7 +168,7 @@ void mqttReconnect() {
   }
 }
 
-String mac_address() {
+String my_mac_address() {
   String address = "";
   for (byte thisByte = 0; thisByte < 6; thisByte++) {
     // print the value of each byte of the MAC address:
@@ -176,7 +178,7 @@ String mac_address() {
   return address;
 }
 
-String ip_address() {
+String my_ip_address() {
   String address = "";
   for (byte thisByte = 0; thisByte < 4; thisByte++) {
     // print the value of each byte of the IP address:
