@@ -17,7 +17,7 @@ byte mac[] = { 0x98, 0x76, 0xB6, 0x10, 0x51, 0x60 }; // Feather-MO-0
 //byte mac[] = { 0x98, 0x76, 0xB6, 0x10, 0x51, 0x60 }; // Feather-MO-0
 //byte mac[] = { 0x90, 0xA2, 0xDA, 0x00, 0x4A, 0xD5 }; // Arduino-Ethernet-0
 
-IPAddress mqttServer(10, 0, 0, 1);
+IPAddress mqttServer(192, 168, 50, 193);
 
 Adafruit_NeoPixel ring_0 = Adafruit_NeoPixel(RINGPIXEL_COUNT, RINGPIXEL_PIN, NEO_RGB + NEO_KHZ800);
 Adafruit_NeoPixel bar_0 = Adafruit_NeoPixel(BAR0PIXEL_COUNT, BAR0PIXEL_PIN, NEO_RGBW + NEO_KHZ800);
@@ -182,51 +182,46 @@ constexpr unsigned int str2int(const char* str, int h = 0) {
 }
 
 void startShow(const char* displayObj, int showType) {
-  // for debuging
-  Serial.println("~=Inside startShow=~");
-  Serial.print("displayObj: ");
-  Serial.println(displayObj);
-  Serial.print("showType: ");
-  Serial.println(showType);
-
   Adafruit_NeoPixel* obj;
 
+  // determine which object to display to
   switch (str2int(displayObj)) {
     case str2int("ring_0"):
       obj = &ring_0;
-      Serial.println("obj set to ring_0");
       break;
     case str2int("bar_0"):
       obj = &bar_0;
-      Serial.println("obj set to bar_0");
       break;
     case str2int("bar_1"):
       obj = &bar_1;
-      Serial.println("obj set to bar_1");
       break;
     default:
-      Serial.print("displayObj: default");
+      break;
   }
 
   switch (showType) {
     case 0:
-      colorWipe(obj->Color(0, 0, 0), 50, obj);    // Black/off
-      Serial.println("showType: 0");
-    break;
+      colorWipe(obj->Color(0, 0, 0), 25, obj);    // Black/off
+      break;
     case 1:
-      colorWipe(obj->Color(255, 0, 0), 50, obj);  // Red
-      Serial.println("showType: 1");
-    break;
+      colorWipe(obj->Color(50, 0, 0), 25, obj);  // Red
+      break;
     case 2:
-      colorWipe(obj->Color(0, 255, 0), 50, obj);  // Green
-      Serial.println("showType: 2");
-    break;
+      colorWipe(obj->Color(0, 50, 0), 25, obj);  // Green
+      break;
     case 3:
-      colorWipe(obj->Color(0, 0, 255), 50, obj);  // Blue
-      Serial.println("showType: 3");
-    break;
+      colorWipe(obj->Color(0, 0, 50), 25, obj);  // Blue
+      break;
+    case 4:
+      colorWipe(obj->Color(50, 50, 0), 25, obj);  // Blue
+      break;
+    case 5:
+      colorWipe(obj->Color(0, 50, 50), 25, obj);  // Blue
+      break;
+    case 6:
+      colorWipe(obj->Color(50, 0, 50), 25, obj);  // Blue
     default:
-      Serial.println("showType: default");
+      break;
   }
 }
 
