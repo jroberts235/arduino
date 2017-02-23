@@ -1,26 +1,32 @@
 #include <SPI.h>
-#include <Ethernet.h>
-//#include <Ethernet2.h>
+#include <Ethernet2.h>
 #include <PubSubClient.h>
 #include <Dns.h>
 #include <Dhcp.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
 
-#define PIXEL_PIN    7 // Arduino-Ethernet-0
-//#define PIXEL_PIN    6
-#define PIXEL_COUNT 6
-//#define PIXEL_COUNT 24
+#define RINGPIXEL_PIN   6
+#define BAR0PIXEL_PIN   12
+#define BAR1PIXEL_PIN   13
+#define RINGPIXEL_COUNT 24
+#define BAR0PIXEL_COUNT 8
+#define BAR1PIXEL_COUNT 8
+
+byte mac[] = { 0x98, 0x76, 0xB6, 0x10, 0x51, 0x60 }; // Feather-MO-0
 //byte mac[] = { 0x98, 0x76, 0xB6, 0x10, 0x51, 0x60 }; // Feather-MO-0
-byte mac[] = { 0x90, 0xA2, 0xDA, 0x00, 0x4A, 0xD5 }; // Arduino-Ethernet-0
+//byte mac[] = { 0x90, 0xA2, 0xDA, 0x00, 0x4A, 0xD5 }; // Arduino-Ethernet-0
 
-IPAddress mqttServer(10, 0, 0, 1);
+IPAddress mqttServer(192, 168, 50, 193);
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel ring_0 = Adafruit_NeoPixel(RINGPIXEL_COUNT, RINGPIXEL_PIN, NEO_RGB + NEO_KHZ800);
+Adafruit_NeoPixel bar_0 = Adafruit_NeoPixel(BAR0PIXEL_COUNT, BAR0PIXEL_PIN, NEO_RGBW + NEO_KHZ800);
+Adafruit_NeoPixel bar_1 = Adafruit_NeoPixel(BAR1PIXEL_COUNT, BAR1PIXEL_PIN, NEO_RGBW + NEO_KHZ800);
+
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
 
-int showType = 0;
+int showType; // try getting rid of this
 
 void setup()
 {
@@ -32,10 +38,14 @@ void setup()
   Ethernet.begin(mac);
   delay(1500);
 
-  // NeoPixel related
-  strip.begin();
-  strip.show(); // Initialize all pixels to 'off'
-  // End
+  //// Initialize all pixels to 'off'
+  ring_0.begin();
+  ring_0.show();
+  bar_0.begin();
+  bar_0.show();
+  bar_1.begin();
+  bar_1.show();
+  //// End
 
   Serial.println("Running...");
   Serial.println();
@@ -60,10 +70,8 @@ void loop()
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("[");
   Serial.print(topic);
-  Serial.print("] ");
-  Serial.print("Raw: ");
+
   for (int i=0;i<length;i++) {
     Serial.print((char)payload[i]);
   }
@@ -83,34 +91,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  for (JsonObject::iterator it=root.begin(); it!=root.end(); ++it)
-  {
-    Serial.println(it->key);
-    Serial.println(it->value.asString());
-  }
+  int showType = root["showType"];
+  const char* displayObj = root["displayObj"];
+  // const char* displayObj = root["displayObj"];
 
-  //const char* sensor = root["sensor"];
-  //long time = root["time"];
-  //double latitude = root["data"][0];
-  //double longitude = root["data"][1];
-//
-  //Serial.println(sensor);
-  //Serial.println(time);
-  //Serial.println(latitude, 6);
-  //Serial.println(longitude, 6);
+  // REMOVE BEFORE FLIGHT
+  //displayObj = "ring_0";
+  //showType = 2;
 
-  // {"showType":0}
-  // {"showType":1}
-  // {"showType":2}
-  // {"showType":3}
-  // {"showType":4}
-  // {"showType":5}
-  // {"showType":6}
-  // {"showType":7}
-  // {"showType":8}
-  // {"showType":9}
-
-  startShow(root["showType"]);
+  startShow(displayObj, showType);
 }
 
 void mqttReconnect() {
@@ -188,112 +177,59 @@ String my_ip_address() {
   return address;
 }
 
-void startShow(int i) {
-  switch(i){
-    case 0: colorWipe(strip.Color(0, 0, 0), 50);    // Black/off
-            break;
-    case 1: colorWipe(strip.Color(255, 0, 0), 50);  // Red
-            break;
-    case 2: colorWipe(strip.Color(0, 255, 0), 50);  // Green
-            break;
-    case 3: colorWipe(strip.Color(0, 0, 255), 50);  // Blue
-            break;
-    case 4: theaterChase(strip.Color(127, 127, 127), 50); // White
-            break;
-    case 5: theaterChase(strip.Color(127,   0,   0), 50); // Red
-            break;
-    case 6: theaterChase(strip.Color(  0,   0, 127), 50); // Blue
-            break;
-    case 7: rainbow(20);
-            break;
-    case 8: rainbowCycle(20);
-            break;
-    case 9: theaterChaseRainbow(50);
-            break;
+constexpr unsigned int str2int(const char* str, int h = 0) {
+  return !str[h] ? 5381 : (str2int(str, h+1) * 33) ^ str[h];
+}
+
+void startShow(const char* displayObj, int showType) {
+  Adafruit_NeoPixel* obj;
+
+  // determine which object to display to
+  switch (str2int(displayObj)) {
+    case str2int("ring_0"):
+      obj = &ring_0;
+      break;
+    case str2int("bar_0"):
+      obj = &bar_0;
+      break;
+    case str2int("bar_1"):
+      obj = &bar_1;
+      break;
+    default:
+      break;
+  }
+
+  switch (showType) {
+    case 0:
+      colorWipe(obj->Color(0, 0, 0), 25, obj);    // Black/off
+      break;
+    case 1:
+      colorWipe(obj->Color(50, 0, 0), 25, obj);  // Red
+      break;
+    case 2:
+      colorWipe(obj->Color(0, 50, 0), 25, obj);  // Green
+      break;
+    case 3:
+      colorWipe(obj->Color(0, 0, 50), 25, obj);  // Blue
+      break;
+    case 4:
+      colorWipe(obj->Color(50, 50, 0), 25, obj);  // Blue
+      break;
+    case 5:
+      colorWipe(obj->Color(0, 50, 50), 25, obj);  // Blue
+      break;
+    case 6:
+      colorWipe(obj->Color(50, 0, 50), 25, obj);  // Blue
+    default:
+      break;
   }
 }
 
 // Fill the dots one after the other with a color
-void colorWipe(uint32_t c, uint8_t wait) {
-  for(uint16_t i=0; i<strip.numPixels(); i++) {
-    strip.setPixelColor(i, c);
-    strip.show();
+void colorWipe(uint32_t c, uint8_t wait, Adafruit_NeoPixel* obj) {
+  for(uint16_t i=0; i<obj->numPixels(); i++) {
+    obj->setPixelColor(i, c);
+    obj->show();
     delay(wait);
   }
-}
-
-void rainbow(uint8_t wait) {
-  uint16_t i, j;
-
-  for(j=0; j<256; j++) {
-    for(i=0; i<strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel((i+j) & 255));
-    }
-    strip.show();
-    delay(wait);
-  }
-}
-
-// Slightly different, this makes the rainbow equally distributed throughout
-void rainbowCycle(uint8_t wait) {
-  uint16_t i, j;
-
-  for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
-    for(i=0; i< strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
-    }
-    strip.show();
-    delay(wait);
-  }
-}
-
-//Theatre-style crawling lights.
-void theaterChase(uint32_t c, uint8_t wait) {
-  for (int j=0; j<10; j++) {  //do 10 cycles of chasing
-    for (int q=0; q < 3; q++) {
-      for (int i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, c);    //turn every third pixel on
-      }
-      strip.show();
-
-      delay(wait);
-
-      for (int i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, 0);        //turn every third pixel off
-      }
-    }
-  }
-}
-
-//Theatre-style crawling lights with rainbow effect
-void theaterChaseRainbow(uint8_t wait) {
-  for (int j=0; j < 256; j++) {     // cycle all 256 colors in the wheel
-    for (int q=0; q < 3; q++) {
-      for (int i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, Wheel( (i+j) % 255));    //turn every third pixel on
-      }
-      strip.show();
-
-      delay(wait);
-
-      for (int i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, 0);        //turn every third pixel off
-      }
-    }
-  }
-}
-
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-  WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-  }
-  if(WheelPos < 170) {
-    WheelPos -= 85;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-  }
-  WheelPos -= 170;
-  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
